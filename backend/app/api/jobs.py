@@ -5,9 +5,26 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_sessionmaker
+from app.github.app_auth import GitHubAppAuth
+from app.github.client import GitHubClient
+from app.models import Job, Run
+from app.pipeline.run import execute_run
 from app.workers.jobs import run_pending
 
 router = APIRouter()
+
+
+def make_pipeline(settings: Settings):
+    auth = GitHubAppAuth(settings.github_app_id, settings.github_app_private_key)
+
+    async def pipeline(session: AsyncSession, run: Run, job: Job) -> None:
+        gh = GitHubClient(auth, job.installation_id or 0)
+        try:
+            await execute_run(session, run, job, gh)
+        finally:
+            await gh.aclose()
+
+    return pipeline
 
 
 @router.api_route("/internal/jobs/run", methods=["GET", "POST"])
@@ -21,5 +38,5 @@ async def run_jobs(
     expected = f"Bearer {settings.cron_secret}"
     if not authorization or not hmac.compare_digest(authorization, expected):
         raise HTTPException(401, "unauthorized")
-    processed = await run_pending(maker, settings.jobs_per_invocation)
+    processed = await run_pending(maker, settings.jobs_per_invocation, make_pipeline(settings))
     return {"processed": processed}
