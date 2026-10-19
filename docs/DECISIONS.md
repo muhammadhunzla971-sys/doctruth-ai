@@ -17,3 +17,11 @@
 - **Run outcomes in this phase**: `SKIPPED` (internal_only) when no JS/TS/Python file changed or no public symbol changed; otherwise `EVIDENCE_COLLECTED`. A job that exhausts its retries leaves a `FAILED` run.
 - **Limits** (bounded work per serverless call): 30 source files per run, files over 200 KB skipped, 50 review threads, 5 linked issues.
 - **Not done yet (see ROADMAP in Phase 10)**: `git blame` per changed line and "previous related PRs" for the history collector; doc_section/claim nodes arrive in Phase 3.
+
+## Phase 3: claims and deterministic drift
+
+- **Claims are extracted with rules, not an LLM** (`app/claims/extract.py`): signatures, defaults, CLI flags, file paths, relative links, code examples, version requirements and prose sentences, each anchored to file, heading and line.
+- **Scope = what the change touched.** `detect_drift` only judges claims related to a changed symbol, flag, removed/renamed path or changed manifest, so a small PR never re-checks the whole docs.
+- **Verdicts**: `contradicted`, `stale_example` (does not parse / uses removed or unknown arguments), `incomplete` (new parameters undocumented), `still_true`, `unknowable` (semantic statements, left for the Phase 4 LLM). Deterministic findings carry confidence 0.95.
+- **Stored in the evidence graph** as `claim` nodes (verdict, reason, evidence in `data`) with `contradicts` / `documents` edges to symbol or file nodes. A run ends at `ANALYZED`, or `SKIPPED` when no docs are affected.
+- **Docs read**: root-level `*.md` and `docs/**/*.md` (max 20 files). `.doctruth.yml` globs/ignores are not parsed yet. External links are not resolved (needs network; ROADMAP). `openapi.*` and ADR-specific handling are not done yet.

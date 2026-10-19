@@ -43,6 +43,9 @@ class FakeGitHub:
     async def list_tags(self, repo):
         return [{"name": "v1.0.0"}]
 
+    async def get_tree(self, repo, sha):
+        return sorted({p for p, _ in self.texts} | {"README.md"})
+
     async def pulls_for_commit(self, repo, sha):
         return [{"number": 7, "merged_at": "2026-01-01T00:00:00Z"}]
 
@@ -65,7 +68,8 @@ async def queue_job(maker, kind="preview", **payload):
 async def test_preview_run_collects_evidence_and_stores_graph(maker):
     gh = FakeGitHub(
         [{"filename": "a.py", "status": "modified"}, {"filename": "README.md", "status": "modified"}],
-        {("a.py", "base"): OLD, ("a.py", "head"): NEW},
+        {("a.py", "base"): OLD, ("a.py", "head"): NEW,
+         ("README.md", "head"): "# Guide\n\nThe default timeout is 30s.\nCall `fetch(url, timeout=30)`.\n"},
         pr_body="Raises the timeout. The default timeout is 30s. Closes #4",
         threads=[{"isResolved": True, "isOutdated": False, "path": "a.py", "line": 1,
                   "comments": {"nodes": [{"body": "ok, doubling the timeout", "author": {"login": "ann"}}]}}],
@@ -74,9 +78,12 @@ async def test_preview_run_collects_evidence_and_stores_graph(maker):
     assert await run_pending(maker, 5, pipeline_for(gh)) == 1
     async with maker() as s:
         run = await s.scalar(select(Run))
-        assert run.status == "EVIDENCE_COLLECTED" and run.commit_sha == "head" and run.pr_number == 3
+        assert run.status == "ANALYZED" and run.commit_sha == "head" and run.pr_number == 3
         steps = [t.to_status for t in await s.scalars(select(RunTransition).order_by(RunTransition.at))]
-        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED"]
+        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED", "ANALYZED"]
+        claims = [n for n in await s.scalars(select(EvidenceNode)) if n.kind == "claim"]
+        assert {c.data["type"] for c in claims} == {"default_value", "signature"}
+        assert all(c.data["verdict"] == "contradicted" for c in claims)
         nodes = list(await s.scalars(select(EvidenceNode)))
         kinds = {n.kind for n in nodes}
         assert {"pr", "file", "symbol", "comment_thread"} <= kinds
@@ -92,7 +99,7 @@ async def test_sync_run_without_pr_number_finds_the_merged_pr(maker):
     await run_pending(maker, 5, pipeline_for(gh))
     async with maker() as s:
         run = await s.scalar(select(Run))
-        assert run.status == "EVIDENCE_COLLECTED" and run.pr_number == 7
+        assert run.pr_number == 7 and run.status == "SKIPPED" and "no documentation affected" in run.reason
 
 
 async def test_docs_only_change_is_skipped_as_internal_only(maker):

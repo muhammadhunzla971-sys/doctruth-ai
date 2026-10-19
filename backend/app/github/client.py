@@ -94,3 +94,8 @@ class GitHubClient:
 
     async def pulls_for_commit(self, repo: str, sha: str) -> list[dict]:
         return await self._json(f"/repos/{repo}/commits/{sha}/pulls", allow_404=True) or []
+
+    async def get_tree(self, repo: str, sha: str) -> list[str]:
+        """All file paths at a commit (one call; GitHub truncates only for huge repos)."""
+        data = await self._json(f"/repos/{repo}/git/trees/{sha}", params={"recursive": 1})
+        return [e["path"] for e in data.get("tree", []) if e.get("type") == "blob"]

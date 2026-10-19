@@ -22,7 +22,7 @@ class Scope:
     pr_number: int | None
     files: list[dict]  # supported source files only
     commits: list[dict]
-    all_file_count: int
+    all_files: list[dict]  # every changed file (any type): filename, status, previous_filename
     truncated: bool
 
 
@@ -50,7 +50,7 @@ async def resolve_scope(gh, repo: str, kind: str, payload: dict) -> Scope:
             pr_number = merged[0]["number"] if merged else None
     cmp = await gh.compare(repo, base, head)
     supported = [f for f in cmp["files"] if language_for(f["filename"])]
-    return Scope(base, head, pr_number, supported[:MAX_FILES], cmp["commits"], len(cmp["files"]),
+    return Scope(base, head, pr_number, supported[:MAX_FILES], cmp["commits"], cmp["files"],
                  len(supported) > MAX_FILES)
 
 
