@@ -186,10 +186,11 @@ def build_graph(
 
 
 async def persist_graph(session: AsyncSession, run_id: uuid.UUID, graph: Graph) -> dict[Key, uuid.UUID]:
-    """One flush for the whole graph (ids are assigned here), so it is a single round trip batch."""
+    """Nodes first, then edges: the ORM does not order inserts across tables without relationship()."""
     ids = {key: uuid.uuid4() for key in graph.nodes}
     session.add_all(EvidenceNode(id=ids[key], run_id=run_id, kind=key[0], ref=key[1][:500], data=data)
                     for key, data in graph.nodes.items())
+    await session.flush()
     session.add_all(EvidenceEdge(run_id=run_id, src_id=ids[src], dst_id=ids[dst], kind=kind)
                     for src, dst, kind in graph.edges)
     await session.flush()
