@@ -27,8 +27,9 @@ async def test_file_text_decodes_base64_and_sends_auth():
     assert seen["auth"] == "token tok"
 
 
-async def test_missing_file_and_oversized_file_return_none():
-    assert await client_with(lambda r: httpx.Response(404)).get_file_text("a/b", "x.py", "sha") is None
+async def test_oversized_file_returns_none_but_missing_file_raises():
+    with pytest.raises(httpx.HTTPStatusError):
+        await client_with(lambda r: httpx.Response(404)).get_file_text("a/b", "x.py", "sha")
     big = lambda r: httpx.Response(200, json={"encoding": "base64", "size": 10**7, "content": ""})  # noqa: E731
     assert await client_with(big).get_file_text("a/b", "x.py", "sha") is None
 

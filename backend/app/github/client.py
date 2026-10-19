@@ -64,9 +64,8 @@ class GitHubClient:
         return {"files": files, "commits": data.get("commits", [])}
 
     async def get_file_text(self, repo: str, path: str, ref: str) -> str | None:
-        resp = await self._request("GET", f"/repos/{repo}/contents/{path}", params={"ref": ref}, allow_404=True)
-        if resp is None:
-            return None
+        # A 404 here means the file should exist but we cannot read it (e.g. missing Contents permission): fail loudly.
+        resp = await self._request("GET", f"/repos/{repo}/contents/{path}", params={"ref": ref})
         body = resp.json()
         if not isinstance(body, dict) or body.get("encoding") != "base64" or body.get("size", 0) > MAX_FILE_BYTES:
             return None

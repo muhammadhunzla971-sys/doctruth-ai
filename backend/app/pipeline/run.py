@@ -20,7 +20,7 @@ async def execute_run(session: AsyncSession, run: Run, job: Job, gh) -> None:
 
     evidence = await collect_evidence(gh, repo, scope)
     if not evidence.changes:
-        await transition(session, run, RunStatus.SKIPPED, "internal_only: no public symbol changes")
+        await transition(session, run, RunStatus.SKIPPED, f"internal_only: no public symbol changes ({evidence.files_read}/{len(scope.files)} files readable)")
         return
     graph = build_graph(evidence.changes, evidence.discussion, evidence.history,
                         [f["filename"] for f in scope.files], scope.head)

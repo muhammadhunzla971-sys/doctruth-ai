@@ -31,6 +31,7 @@ class Evidence:
     changes: list[CodeChange]
     discussion: DiscussionEvidence | None
     history: HistoryEvidence
+    files_read: int = 0
 
 
 async def resolve_scope(gh, repo: str, kind: str, payload: dict) -> Scope:
@@ -106,4 +107,5 @@ async def collect_evidence(gh, repo: str, scope: Scope) -> Evidence:
     """The three collectors fetch their inputs concurrently; the parsing itself is pure and synchronous."""
     files, discussion, history = await asyncio.gather(
         _file_changes(gh, repo, scope), _discussion(gh, repo, scope), _history(gh, repo, scope))
-    return Evidence(collect_code_changes(files), discussion, history)
+    read = sum(1 for f in files if f.new_text or f.old_text)
+    return Evidence(collect_code_changes(files), discussion, history, read)
