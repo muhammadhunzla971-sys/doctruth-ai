@@ -7,6 +7,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_sessionmaker
 from app.github.app_auth import GitHubAppAuth
 from app.github.client import GitHubClient
+from app.llm.client import LLMClient
 from app.models import Job, Run
 from app.pipeline.run import execute_run
 from app.workers.jobs import run_pending
@@ -19,10 +20,13 @@ def make_pipeline(settings: Settings):
 
     async def pipeline(session: AsyncSession, run: Run, job: Job) -> None:
         gh = GitHubClient(auth, job.installation_id or 0)
+        llm = LLMClient(settings) if settings.llm_api_key else None  # one client per run = one call budget per run
         try:
-            await execute_run(session, run, job, gh)
+            await execute_run(session, run, job, gh, llm, settings.confidence_threshold)
         finally:
             await gh.aclose()
+            if llm:
+                await llm.aclose()
 
     return pipeline
 

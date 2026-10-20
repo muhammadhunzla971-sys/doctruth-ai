@@ -21,6 +21,19 @@ class Finding:
     evidence: list[dict] = field(default_factory=list)
     symbols: list[Symbol] = field(default_factory=list)
     file_path: str | None = None  # path-type evidence node (removed/renamed file)
+    meta: dict = field(default_factory=dict)  # structured facts for the rewriter (new value, new path, ...)
+    sources_conflict: bool = False  # discussion disagreed with merged code (code wins)
+    notes: list[str] = field(default_factory=list)
+    edit: dict | None = None  # ProposedEdit, filled in Phase 4
+
+
+@dataclass
+class DriftContext:
+    """Everything detect_drift needs, kept so rewritten claims can be re-verified against the same evidence."""
+    changes: list[CodeChange]
+    gone: dict[str, str | None]
+    tree: set[str]
+    manifests: dict[str, str]
 
 
 def _last(name: str) -> str:
@@ -55,7 +68,8 @@ def _check_signature(claim: Claim, changes: list[CodeChange]) -> Finding | None:
             return Finding(claim, "contradicted", f"`{name}` was removed", evidence=[_code_ev(ch, "symbol removed")], symbols=[ch.symbol])
         if ch.kind == "renamed":
             return Finding(claim, "contradicted", f"`{old_name}` was renamed to `{ch.symbol.name}`",
-                           evidence=[_code_ev(ch, f"renamed to {ch.symbol.name}")], symbols=[ch.symbol])
+                           evidence=[_code_ev(ch, f"renamed to {ch.symbol.name}")], symbols=[ch.symbol],
+                           meta={"new_name": ch.symbol.name})
         if ch.kind in ("signature_changed", "default_changed"):
             new = [(p.name, p.default) for p in ch.symbol.params if p.name not in ("self", "cls")]
             claimed = _claimed_params(claim)
@@ -90,7 +104,8 @@ def _check_default(claim: Claim, changes: list[CodeChange]) -> Finding | None:
         ev = [_code_ev(ch, f"{ch.detail['param']} is now {ch.detail['new']} (was {ch.detail['old']})")]
         if same_value(said, ch.detail["new"]):
             return Finding(claim, "still_true", "value matches the code", evidence=ev, symbols=[ch.symbol])
-        return Finding(claim, "contradicted", f"docs say {said}, code says {ch.detail['new']}", evidence=ev, symbols=[ch.symbol])
+        return Finding(claim, "contradicted", f"docs say {said}, code says {ch.detail['new']}", evidence=ev,
+                       symbols=[ch.symbol], meta={"new_value": ch.detail["new"]})
     return None
 
 
@@ -106,7 +121,8 @@ def _check_cli(claim: Claim, changes: list[CodeChange]) -> Finding | None:
             if ch.kind == "default_changed" and value is not None and ch.detail["new"] is not None \
                     and not same_value(value, ch.detail["new"]):
                 return Finding(claim, "contradicted", f"docs say {flag} {value}, default is now {ch.detail['new']}",
-                               evidence=ev, symbols=[ch.symbol])
+                               evidence=ev, symbols=[ch.symbol],
+                               meta={"flag": flag, "old_value": value, "new_value": ch.detail["new"]})
             result = Finding(claim, "still_true", "flag still matches", evidence=ev, symbols=[ch.symbol])
     return result
 
@@ -116,7 +132,7 @@ def _check_path(claim: Claim, path: str, gone: dict[str, str | None], tree: set[
         if (old == path or old.endswith("/" + path)) and old not in tree:
             reason = f"`{path}` was renamed to `{new}`" if new else f"`{path}` was removed"
             return Finding(claim, "contradicted", reason, file_path=old,
-                           evidence=[{"kind": "history", "ref": old, "note": reason}])
+                           evidence=[{"kind": "history", "ref": old, "note": reason}], meta={"new_path": new})
     return None
 
 
@@ -191,7 +207,8 @@ def _check_version(claim: Claim, manifests: dict[str, str]) -> Finding | None:
     file = "pyproject.toml" if claim.data["runtime"] == "python" else "package.json"
     return Finding(claim, "still_true" if ok else "contradicted",
                    "version matches the manifest" if ok else f"{file} now requires {actual}, docs say {wanted}",
-                   evidence=[{"kind": "code", "ref": file, "note": f"requires {actual}"}])
+                   evidence=[{"kind": "code", "ref": file, "note": f"requires {actual}"}],
+                   meta={"evidence_file": file, "old_version": wanted, "new_version": actual})
 
 
 def detect_drift(

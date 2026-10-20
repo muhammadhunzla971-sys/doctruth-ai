@@ -78,12 +78,16 @@ async def test_preview_run_collects_evidence_and_stores_graph(maker):
     assert await run_pending(maker, 5, pipeline_for(gh)) == 1
     async with maker() as s:
         run = await s.scalar(select(Run))
-        assert run.status == "ANALYZED" and run.commit_sha == "head" and run.pr_number == 3
+        assert run.status == "VERIFIED" and run.commit_sha == "head" and run.pr_number == 3
         steps = [t.to_status for t in await s.scalars(select(RunTransition).order_by(RunTransition.at))]
-        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED", "ANALYZED"]
+        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED", "ANALYZED", "DRAFTED", "VERIFIED"]
         claims = [n for n in await s.scalars(select(EvidenceNode)) if n.kind == "claim"]
         assert {c.data["type"] for c in claims} == {"default_value", "signature"}
         assert all(c.data["verdict"] == "contradicted" for c in claims)
+        edits = {c.data["type"]: c.data["edit"] for c in claims}
+        assert edits["default_value"]["after"] == "The default timeout is 60s."
+        assert edits["signature"]["after"] == "fetch(url, timeout=60)"
+        assert all(e["kind"] == "edit" and e["method"] == "deterministic" and e["evidence_ids"] for e in edits.values())
         nodes = list(await s.scalars(select(EvidenceNode)))
         kinds = {n.kind for n in nodes}
         assert {"pr", "file", "symbol", "comment_thread"} <= kinds
