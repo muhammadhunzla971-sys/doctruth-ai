@@ -99,3 +99,53 @@ class GitHubClient:
         """All file paths at a commit (one call; GitHub truncates only for huge repos)."""
         data = await self._json(f"/repos/{repo}/git/trees/{sha}", params={"recursive": 1})
         return [e["path"] for e in data.get("tree", []) if e.get("type") == "blob"]
+
+    # --- writes (Phase 5) ---
+    async def get_file(self, repo: str, path: str, ref: str) -> tuple[str, str] | None:
+        """(text, blob sha) of a file, or None if it does not exist at ref."""
+        resp = await self._request("GET", f"/repos/{repo}/contents/{path}", params={"ref": ref}, allow_404=True)
+        if resp is None:
+            return None
+        body = resp.json()
+        if not isinstance(body, dict) or body.get("encoding") != "base64":
+            return None
+        return base64.b64decode(body["content"]).decode("utf-8", "replace"), body["sha"]
+
+    async def get_ref(self, repo: str, branch: str) -> dict | None:
+        return await self._json(f"/repos/{repo}/git/ref/heads/{branch}", allow_404=True)
+
+    async def create_ref(self, repo: str, branch: str, sha: str) -> None:
+        await self._request("POST", f"/repos/{repo}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": sha})
+
+    async def reset_ref(self, repo: str, branch: str, sha: str) -> None:
+        await self._request("PATCH", f"/repos/{repo}/git/refs/heads/{branch}", json={"sha": sha, "force": True})
+
+    async def put_file(self, repo: str, path: str, text: str, message: str, branch: str, sha: str) -> None:
+        await self._request("PUT", f"/repos/{repo}/contents/{path}", json={
+            "message": message, "branch": branch, "sha": sha,
+            "content": base64.b64encode(text.encode()).decode()})
+
+    async def find_open_pr(self, repo: str, branch: str) -> dict | None:
+        owner = repo.split("/", 1)[0]
+        prs = await self._json(f"/repos/{repo}/pulls", params={"head": f"{owner}:{branch}", "state": "open"})
+        return prs[0] if prs else None
+
+    async def create_pr(self, repo: str, title: str, body: str, head: str, base: str) -> dict:
+        resp = await self._request("POST", f"/repos/{repo}/pulls",
+                                   json={"title": title, "body": body, "head": head, "base": base})
+        return resp.json()
+
+    async def update_pr(self, repo: str, number: int, title: str, body: str) -> dict:
+        resp = await self._request("PATCH", f"/repos/{repo}/pulls/{number}", json={"title": title, "body": body})
+        return resp.json()
+
+    async def list_comments(self, repo: str, number: int) -> list[dict]:
+        return await self._json(f"/repos/{repo}/issues/{number}/comments", params={"per_page": 100}) or []
+
+    async def create_comment(self, repo: str, number: int, body: str) -> dict:
+        resp = await self._request("POST", f"/repos/{repo}/issues/{number}/comments", json={"body": body})
+        return resp.json()
+
+    async def update_comment(self, repo: str, comment_id: int, body: str) -> dict:
+        resp = await self._request("PATCH", f"/repos/{repo}/issues/comments/{comment_id}", json={"body": body})
+        return resp.json()

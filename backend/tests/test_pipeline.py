@@ -49,6 +49,55 @@ class FakeGitHub:
     async def pulls_for_commit(self, repo, sha):
         return [{"number": 7, "merged_at": "2026-01-01T00:00:00Z"}]
 
+    # --- writes: recorded in memory so tests can assert on what would reach GitHub ---
+    @property
+    def w(self):
+        if not hasattr(self, "_w"):
+            self._w = {"refs": {}, "puts": [], "prs": [], "comments": []}
+        return self._w
+
+    async def get_file(self, repo, path, ref):
+        for (p, r), t in self.texts.items():
+            if p == path and r in (ref, "head"):
+                return t, "blobsha"
+        return None
+
+    async def get_ref(self, repo, branch):
+        return self.w["refs"].get(branch)
+
+    async def create_ref(self, repo, branch, sha):
+        self.w["refs"][branch] = {"object": {"sha": sha}}
+
+    async def reset_ref(self, repo, branch, sha):
+        self.w["refs"][branch] = {"object": {"sha": sha}}
+
+    async def put_file(self, repo, path, text, message, branch, sha):
+        self.w["puts"].append({"path": path, "text": text, "branch": branch})
+
+    async def find_open_pr(self, repo, branch):
+        return next((p for p in self.w["prs"] if p["head"] == branch), None)
+
+    async def create_pr(self, repo, title, body, head, base):
+        pr = {"number": 100 + len(self.w["prs"]), "title": title, "body": body, "head": head, "base": base}
+        self.w["prs"].append(pr)
+        return pr
+
+    async def update_pr(self, repo, number, title, body):
+        pr = next(p for p in self.w["prs"] if p["number"] == number)
+        pr.update(title=title, body=body)
+        return pr
+
+    async def list_comments(self, repo, n):
+        return [c for c in self.w["comments"] if c["pr"] == n]
+
+    async def create_comment(self, repo, n, body):
+        c = {"id": len(self.w["comments"]) + 1, "pr": n, "body": body}
+        self.w["comments"].append(c)
+        return c
+
+    async def update_comment(self, repo, cid, body):
+        next(c for c in self.w["comments"] if c["id"] == cid)["body"] = body
+
 
 def pipeline_for(gh):
     from app.pipeline.run import execute_run
@@ -78,9 +127,9 @@ async def test_preview_run_collects_evidence_and_stores_graph(maker):
     assert await run_pending(maker, 5, pipeline_for(gh)) == 1
     async with maker() as s:
         run = await s.scalar(select(Run))
-        assert run.status == "VERIFIED" and run.commit_sha == "head" and run.pr_number == 3
+        assert run.status == "PUBLISHED" and run.commit_sha == "head" and run.pr_number == 3
         steps = [t.to_status for t in await s.scalars(select(RunTransition).order_by(RunTransition.at))]
-        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED", "ANALYZED", "DRAFTED", "VERIFIED"]
+        assert steps == ["RECEIVED", "SCOPED", "EVIDENCE_COLLECTED", "ANALYZED", "DRAFTED", "VERIFIED", "PUBLISHED"]
         claims = [n for n in await s.scalars(select(EvidenceNode)) if n.kind == "claim"]
         assert {c.data["type"] for c in claims} == {"default_value", "signature"}
         assert all(c.data["verdict"] == "contradicted" for c in claims)

@@ -6,6 +6,7 @@ from app.evidence.graph import build_graph, persist_graph
 from app.llm.client import LLMClient
 from app.models import Job, Run
 from app.pipeline.analyze import analyze_docs, persist_findings, register_files
+from app.pipeline.publish import publish
 from app.pipeline.reason import build_edits
 from app.pipeline.state import RunStatus, transition
 
@@ -52,3 +53,6 @@ async def execute_run(session: AsyncSession, run: Run, job: Job, gh, llm: LLMCli
     summary = f"{stats['edits']} edits, {stats['questions']} questions, {stats['llm_calls']} LLM calls, {stats['tokens']} tokens"
     await transition(session, run, RunStatus.DRAFTED, summary)
     await transition(session, run, RunStatus.VERIFIED, summary)
+
+    items = [{**f.edit, "reason": f.reason, "evidence": f.evidence} for f in findings if f.edit]
+    await publish(session, run, gh, job.kind, items)

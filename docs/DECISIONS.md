@@ -36,3 +36,13 @@
 - **Ask, don't guess.** Anything unresolved, below `CONFIDENCE_THRESHOLD` (0.8), removed upstream, or produced while the LLM is down/unconfigured becomes a `question` for the PR author. No `GROQ_API_KEY`/`LLM_API_KEY` means the run still works (deterministic edits + questions).
 - **Storage.** The ProposedEdit lives in the claim node's `data.edit` (kind, before, after, evidence node ids, confidence, method, prompt versions). Run ends at `VERIFIED` with edit/question/LLM-call/token counts in the transition note.
 - **Not done yet (ROADMAP):** `new_section` proposals for undocumented new public symbols, response caching keyed by blob SHA, per-installation token budgets, cost in currency.
+
+## Phase 5: publishing
+
+- Merged code (sync run): edits are applied to the docs on a bot branch `doctruth/sync-<pr>` created from the analysed commit, then one doc-sync PR is opened. Re-runs reset the branch to that commit and update the same PR, so publishing is idempotent.
+- Open PR (preview run): one comment, found by a hidden marker and edited in place on every new push. Nothing is written to the repo.
+- Edits are applied inside their own lines only. If the doc text no longer contains the `before` text (someone edited it since analysis) the edit is not applied; it is reported as a question. CRLF files stay CRLF.
+- Questions never become edits. With no edit and no PR to comment on, the run ends NEEDS_HUMAN.
+- A 401/403/404 from a write fails the job with the exact permission fix (Contents and Pull requests: Read and write); the job queue retries it.
+- The bot's own branches (`doctruth/*`) are ignored by the webhook handler, so merging the doc PR cannot loop.
+- Not done yet: auto-closing a doc PR whose edits became obsolete, a `.doctruth.yml` opt-out, commit-status checks.
