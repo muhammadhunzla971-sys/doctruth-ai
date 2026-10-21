@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 
-from app.api import health, jobs, webhooks
+from app.api import dashboard, health, jobs, webhooks
 from app.core.logging import request_id_var, setup_logging
 
 setup_logging()
@@ -22,3 +22,4 @@ async def request_id_middleware(request: Request, call_next):
 app.include_router(health.router)
 app.include_router(webhooks.router)
 app.include_router(jobs.router)
+app.include_router(dashboard.router)

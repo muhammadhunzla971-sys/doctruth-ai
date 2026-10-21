@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     github_app_private_key: str = ""  # PEM text or base64 of the PEM
     github_webhook_secret: str = ""
     cron_secret: str = ""  # protects /internal/jobs/run
+    dashboard_token: str = ""  # password for /dashboard; empty = dashboard disabled
     public_base_url: str = ""  # e.g. https://doctruth-ai.vercel.app
     job_max_attempts: int = 3
     jobs_per_invocation: int = 5

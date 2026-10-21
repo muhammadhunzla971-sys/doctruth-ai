@@ -46,3 +46,10 @@
 - A 401/403/404 from a write fails the job with the exact permission fix (Contents and Pull requests: Read and write); the job queue retries it.
 - The bot's own branches (`doctruth/*`) are ignored by the webhook handler, so merging the doc PR cannot loop.
 - Not done yet: auto-closing a doc PR whose edits became obsolete, a `.doctruth.yml` opt-out, commit-status checks.
+
+## Phase 6: dashboard
+
+- Server-rendered HTML from the same FastAPI app (no frontend build, no second deployment): `/dashboard` (runs + counts), `/dashboard/runs/<id>` (state timeline, evidence-graph counts, every finding with its edit/question and evidence), `/api/runs` (JSON).
+- Closed by default: with no `DASHBOARD_TOKEN` the routes return 503. Login sets an HttpOnly, SameSite=Lax cookie holding an HMAC of the token (the token itself is never stored in the cookie); the JSON API also accepts `Authorization: Bearer <token>`.
+- All repo-derived text is HTML-escaped and a strict CSP (`default-src 'none'`) is sent, so a hostile PR title or doc line cannot run script in the dashboard.
+- Read-only: no buttons that change GitHub. Not done yet: per-installation views, filters, accept/reject of proposed edits from the UI.
