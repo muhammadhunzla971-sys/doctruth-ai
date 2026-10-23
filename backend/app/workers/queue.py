@@ -4,6 +4,7 @@ from datetime import timedelta
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.llm.scrub import scrub
 from app.models import Job
 from app.models.tables import utcnow
 
@@ -70,7 +71,7 @@ async def complete(session: AsyncSession, job: Job) -> None:
 
 
 async def fail(session: AsyncSession, job: Job, error: str) -> None:
-    job.last_error = error
+    job.last_error = scrub(error)
     if job.attempts >= job.max_attempts:
         job.status = "dead"
     else:

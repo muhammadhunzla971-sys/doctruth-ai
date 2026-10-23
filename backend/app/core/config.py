@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     dashboard_token: str = ""  # password for /dashboard; empty = dashboard disabled
     public_base_url: str = ""  # e.g. https://doctruth-ai.vercel.app
     job_max_attempts: int = 3
+    job_time_budget_s: float = 40.0  # stop claiming new jobs after this many seconds in one invocation
+    max_webhook_bytes: int = 5_000_000
+    dry_run: bool = False  # analyse and draft everything, write nothing to GitHub (kill switch for publishing)
     jobs_per_invocation: int = 5
     # LLM (OpenAI-compatible; Groq by default). Without a key the pipeline still runs and asks questions instead.
     llm_api_key: str = Field("", validation_alias=AliasChoices("LLM_API_KEY", "GROQ_API_KEY"))

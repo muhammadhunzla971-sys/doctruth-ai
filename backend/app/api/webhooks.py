@@ -20,7 +20,12 @@ async def github_webhook(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> dict:
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > settings.max_webhook_bytes:
+        raise HTTPException(413, "payload too large")
     body = await request.body()
+    if len(body) > settings.max_webhook_bytes:
+        raise HTTPException(413, "payload too large")
     if not verify_signature(settings.github_webhook_secret, body, request.headers.get("x-hub-signature-256")):
         raise HTTPException(401, "invalid signature")
 

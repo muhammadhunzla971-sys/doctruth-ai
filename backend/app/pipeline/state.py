@@ -2,6 +2,7 @@ from enum import Enum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.llm.scrub import scrub
 from app.models import Run, RunTransition
 
 
@@ -41,6 +42,7 @@ async def transition(session: AsyncSession, run: Run, to: RunStatus, note: str |
     current = RunStatus(run.status)
     if to not in ALLOWED[current]:
         raise IllegalTransition(f"{current.value} -> {to.value}")
+    note = scrub(note) if note else note  # error text can carry URLs with credentials or tokens
     session.add(RunTransition(run_id=run.id, from_status=current.value, to_status=to.value, note=note))
     run.status = to.value
     if to in (S.SKIPPED, S.NEEDS_HUMAN, S.FAILED) and note:

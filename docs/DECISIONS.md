@@ -60,3 +60,13 @@
 - Metrics: edit precision, edit recall, question recall, false edits (edit where none was due, or an edit where a question was due), wrong edits, noise questions. `tests/test_eval.py` gates on zero false/wrong/noise and recall >= 0.9, so a regression fails CI.
 - The first run found one real bug: a sentence like "Call `fetch(url, timeout=30)`." that was still correct also raised a vague "behavior statement" question just because the body of `fetch` changed. A line owned by a precise claim (signature, flag, path, link) is now never also reported as a behavior claim.
 - Limits: the cases are small and synthetic, so a perfect score means "no known regression", not "accurate on real repos". LLM-path quality (judge/rewrite/critic) is not measured offline; extend `cases.py` with real doc/PR pairs as they appear.
+
+## Phase 8: hardening
+
+- **Secrets never land in storage.** Error text written to `jobs.last_error` and run transition notes passes through the same scrubber used for the LLM (credentialed URLs such as a database DSN, GitHub/Groq/AWS keys, JWTs, PEM blocks, `*_KEY=...` assignments).
+- **Webhook size cap** (`MAX_WEBHOOK_BYTES`, 5 MB): checked on `Content-Length` and on the actual body, before the signature is computed and before JSON parsing.
+- **Serverless time budget** (`JOB_TIME_BUDGET_S`, 40 s): after the first job, no new job is started once the budget is spent; the rest stay queued and the next trigger (webhook or daily cron) continues. A stuck run is reclaimed after 5 minutes (Phase 1).
+- **`DRY_RUN=true`** analyses, drafts and verifies everything and stores it for the dashboard, but writes nothing to GitHub. It is the kill switch for publishing.
+- **Dashboard**: wrong passwords wait 1.5 s. This only slows guessing: serverless has no shared counter for a real lockout, so use a long random `DASHBOARD_TOKEN`.
+- Already in place from earlier phases: HMAC webhook verification, delivery idempotency, job dedupe keys, retry with backoff and dead jobs, bounded LLM calls per run, untrusted-data wrapping, strict CSP on the dashboard, bot branches ignored by the webhook.
+- **Not done (ROADMAP):** per-installation daily LLM budget, per-repo opt-out file (`.doctruth.yml`), auto-closing obsolete doc PRs, alerting on dead jobs.

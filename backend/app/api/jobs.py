@@ -22,7 +22,7 @@ def make_pipeline(settings: Settings):
         gh = GitHubClient(auth, job.installation_id or 0)
         llm = LLMClient(settings) if settings.llm_api_key else None  # one client per run = one call budget per run
         try:
-            await execute_run(session, run, job, gh, llm, settings.confidence_threshold)
+            await execute_run(session, run, job, gh, llm, settings.confidence_threshold, settings.dry_run)
         finally:
             await gh.aclose()
             if llm:
@@ -42,5 +42,5 @@ async def run_jobs(
     expected = f"Bearer {settings.cron_secret}"
     if not authorization or not hmac.compare_digest(authorization, expected):
         raise HTTPException(401, "unauthorized")
-    processed = await run_pending(maker, settings.jobs_per_invocation, make_pipeline(settings))
+    processed = await run_pending(maker, settings.jobs_per_invocation, make_pipeline(settings), settings.job_time_budget_s)
     return {"processed": processed}

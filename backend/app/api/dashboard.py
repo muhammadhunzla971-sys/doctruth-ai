@@ -1,4 +1,5 @@
 """Read-only dashboard: runs, their state-machine timeline, proposed edits and evidence. Server-rendered, no JS build."""
+import asyncio
 import hashlib
 import hmac
 import uuid
@@ -75,6 +76,7 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
     form = parse_qs((await request.body()).decode("utf-8", "replace"))
     token = (form.get("token") or [""])[0]
     if not hmac.compare_digest(token, settings.dashboard_token):
+        await asyncio.sleep(1.5)  # makes guessing slow; serverless has no shared counter for a real lockout
         return login_page("Wrong password")
     resp = RedirectResponse("/dashboard", status_code=303)
     resp.set_cookie(COOKIE, _session_value(token), httponly=True, secure=request.url.scheme == "https",

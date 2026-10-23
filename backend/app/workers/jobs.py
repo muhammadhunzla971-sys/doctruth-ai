@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Awaitable, Callable
 
 from sqlalchemy import select
@@ -47,9 +48,14 @@ async def record_dead_job(session: AsyncSession, job: Job) -> None:
     await transition(session, run, RunStatus.FAILED, (job.last_error or "job failed")[:500])
 
 
-async def run_pending(maker: async_sessionmaker[AsyncSession], limit: int, pipeline: Pipeline | None = None) -> int:
+async def run_pending(maker: async_sessionmaker[AsyncSession], limit: int, pipeline: Pipeline | None = None,
+                      budget_s: float | None = None) -> int:
+    """Process up to `limit` jobs; stop starting new ones once `budget_s` is spent (serverless time limit)."""
     processed = 0
+    started = time.monotonic()
     for _ in range(limit):
+        if budget_s is not None and processed and time.monotonic() - started > budget_s:
+            break  # leftover jobs stay queued for the next trigger
         async with maker() as session:
             job = await claim_next(session)
             await session.commit()

@@ -12,7 +12,7 @@ from app.pipeline.state import RunStatus, transition
 
 
 async def execute_run(session: AsyncSession, run: Run, job: Job, gh, llm: LLMClient | None = None,
-                      threshold: float = 0.8) -> None:
+                      threshold: float = 0.8, dry_run: bool = False) -> None:
     repo = job.repo_full_name
     scope = await resolve_scope(gh, repo, job.kind, job.payload)
     run.commit_sha = scope.head
@@ -54,5 +54,7 @@ async def execute_run(session: AsyncSession, run: Run, job: Job, gh, llm: LLMCli
     await transition(session, run, RunStatus.DRAFTED, summary)
     await transition(session, run, RunStatus.VERIFIED, summary)
 
+    if dry_run:
+        return  # DRY_RUN: everything is stored for the dashboard, nothing is written to GitHub
     items = [{**f.edit, "reason": f.reason, "evidence": f.evidence} for f in findings if f.edit]
     await publish(session, run, gh, job.kind, items)
