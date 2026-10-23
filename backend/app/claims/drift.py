@@ -211,6 +211,9 @@ def _check_version(claim: Claim, manifests: dict[str, str]) -> Finding | None:
                    meta={"evidence_file": file, "old_version": wanted, "new_version": actual})
 
 
+PRECISE = {"signature", "cli_command", "file_path", "link"}
+
+
 def detect_drift(
     claims: list[Claim],
     changes: list[CodeChange],
@@ -244,6 +247,8 @@ def detect_drift(
                             confidence=0.0, evidence=[_code_ev(related[0], related[0].kind)], symbols=[related[0].symbol])
         if f is not None:
             findings.append(f)
-    # a prose sentence already judged by a precise check is not reported again as a vague behavior claim
+    # a prose sentence already owned by a precise claim (signature, default, flag, path...) is not also reported as a
+    # vague behavior claim, whether or not the precise check found drift ("Call `f(a)`." must not ask about f's body)
     judged = {(f.claim.doc_path, f.claim.line_start) for f in findings if f.claim.type != "behavior_statement"}
+    judged |= {(c.doc_path, c.line_start) for c in claims if c.type in PRECISE}
     return [f for f in findings if f.claim.type != "behavior_statement" or (f.claim.doc_path, f.claim.line_start) not in judged]

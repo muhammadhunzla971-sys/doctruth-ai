@@ -53,3 +53,10 @@
 - Closed by default: with no `DASHBOARD_TOKEN` the routes return 503. Login sets an HttpOnly, SameSite=Lax cookie holding an HMAC of the token (the token itself is never stored in the cookie); the JSON API also accepts `Authorization: Bearer <token>`.
 - All repo-derived text is HTML-escaped and a strict CSP (`default-src 'none'`) is sent, so a hostile PR title or doc line cannot run script in the dashboard.
 - Read-only: no buttons that change GitHub. Not done yet: per-installation views, filters, accept/reject of proposed edits from the UI.
+
+## Phase 7: benchmark
+
+- `python -m app.eval.run` (from `backend/`) runs 20 hand-labelled cases through the real extract -> drift -> rewrite -> verify code, offline and without the LLM. Expectations were written from what a careful human editor would do, not copied from output. 15 cases expect an edit or a question; 5 expect that nothing is touched.
+- Metrics: edit precision, edit recall, question recall, false edits (edit where none was due, or an edit where a question was due), wrong edits, noise questions. `tests/test_eval.py` gates on zero false/wrong/noise and recall >= 0.9, so a regression fails CI.
+- The first run found one real bug: a sentence like "Call `fetch(url, timeout=30)`." that was still correct also raised a vague "behavior statement" question just because the body of `fetch` changed. A line owned by a precise claim (signature, flag, path, link) is now never also reported as a behavior claim.
+- Limits: the cases are small and synthetic, so a perfect score means "no known regression", not "accurate on real repos". LLM-path quality (judge/rewrite/critic) is not measured offline; extend `cases.py` with real doc/PR pairs as they appear.
