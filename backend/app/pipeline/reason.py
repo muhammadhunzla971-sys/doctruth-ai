@@ -1,4 +1,4 @@
-"""Phase 4: fusion rules, semantic judgement, rewrite and critic. Deterministic first, the LLM only where a rule cannot decide."""
+"""fusion rules, semantic judgement, rewrite and critic. Deterministic first, the LLM only where a rule cannot decide."""
 import difflib
 import logging
 import re

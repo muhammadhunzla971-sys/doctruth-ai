@@ -24,7 +24,7 @@ class Finding:
     meta: dict = field(default_factory=dict)  # structured facts for the rewriter (new value, new path, ...)
     sources_conflict: bool = False  # discussion disagreed with merged code (code wins)
     notes: list[str] = field(default_factory=list)
-    edit: dict | None = None  # ProposedEdit, filled in Phase 4
+    edit: dict | None = None  # ProposedEdit, filled by the reasoning stage
 
 
 @dataclass
@@ -75,12 +75,13 @@ def _check_signature(claim: Claim, changes: list[CodeChange]) -> Finding | None:
             claimed = _claimed_params(claim)
             same_prefix = [c[0] for c in claimed] == [n[0] for n in new[: len(claimed)]]
             defaults_ok = all(c[1] is None or same_value(c[1], n[1]) for c, n in zip(claimed, new))
-            ev = [_code_ev(ch, f"signature is now {ch.symbol.signature}")]
+            shown = f"{claim.data['name']}({', '.join(n if d in (None, '') else f'{n}={d}' for n, d in new)})"
+            ev = [_code_ev(ch, f"signature is now ({shown.split('(', 1)[1]}")]
             if same_prefix and defaults_ok and len(claimed) == len(new):
                 return Finding(claim, "still_true", "signature matches the code", evidence=ev, symbols=[ch.symbol])
             if same_prefix and defaults_ok and len(claimed) < len(new):
                 return Finding(claim, "incomplete", "new parameters are not documented", evidence=ev, symbols=[ch.symbol])
-            return Finding(claim, "contradicted", f"signature is now `{name}{ch.symbol.signature}`", evidence=ev, symbols=[ch.symbol])
+            return Finding(claim, "contradicted", f"signature is now `{shown}`", evidence=ev, symbols=[ch.symbol])
     return None
 
 
@@ -243,7 +244,7 @@ def detect_drift(
         elif claim.type == "behavior_statement":
             related = [ch for ch in real if ch.kind != "added" and _mentions(claim.text, _tokens(ch))]
             if related:
-                f = Finding(claim, "unknowable", "semantic statement about a changed symbol; needs the LLM check (Phase 4)",
+                f = Finding(claim, "unknowable", "this sentence describes how a changed symbol behaves, which rules cannot verify",
                             confidence=0.0, evidence=[_code_ev(related[0], related[0].kind)], symbols=[related[0].symbol])
         if f is not None:
             findings.append(f)

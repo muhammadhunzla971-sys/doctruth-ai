@@ -1,4 +1,4 @@
-"""Phase 3 stage: extract doc claims and check them deterministically against this change's evidence."""
+"""extract doc claims and check them deterministically against this change's evidence."""
 import asyncio
 import uuid
 

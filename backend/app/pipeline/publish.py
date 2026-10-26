@@ -52,7 +52,7 @@ def render(items: list[dict], run: Run, *, skipped: list[dict] = (), preview: bo
     if edits:
         parts.append(f"#### Proposed edits ({len(edits)})\n" + "\n".join(_edit_md(e) for e in edits))
     if qs:
-        parts.append(f"#### Questions ({len(qs)})\nI am not confident enough to edit these, so I am asking.\n" +
+        parts.append(f"#### Questions ({len(qs)})\nI am not confident enough to edit these, so I am asking.\n\n" +
                      "\n".join(f"- {q.get('question') or ('`' + q['doc_path'] + ':' + str(q['line_start']) + '` changed in the doc since analysis, not edited')}"
                                for q in qs))
     parts.append(f"<sub>run `{run.id}`</sub>")
